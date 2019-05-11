@@ -119,28 +119,25 @@ pipeline:
             field: Molecular_function
             separator: ";"
         - script: 
-                source: 
-                    include: 
-                        ID: macro1
-                        parameters: 
-                            - Biological_process
+                include: 
+                    ID: macro1
+                    parameters: 
+                        - Biological_process
         - script: 
-                source: 
-                    include: 
-                        ID: macro1
-                        parameters: 
-                            - Cellular_components
+                include: 
+                    ID: macro1
+                    parameters: 
+                        - Cellular_components
         - script: 
-                source: 
-                    include: 
-                        ID: macro1
-                        parameters: 
-                            - Molecular_function
+                include: 
+                    ID: macro1
+                    parameters: 
+                        - Molecular_function
         - remove:
             field: Biological_process
-        - split:
+        - remove:
             field: Cellular_components
-        - split:
+        - remove:
             field: Molecular_function
             
             
