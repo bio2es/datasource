@@ -1,6 +1,6 @@
-# by Francois Belleau
+# by François Belleau
 # https://creativecommons.org/licenses/by/3.0
-# ETL to load Panther familly definition in ES in JSON-LD format
+# ETL to load RDF version of 'Panther familly definition' in ElasticSearch index using JSON-LD format
 
 context: 
     elasticsearch: 
@@ -11,12 +11,12 @@ context:
         folder: ~/TEMP
         
 download:
-    stepID: DownloadClassification
+    ID: Download_HMM_classification
     fileID: HMM_classifications
     URL: ftp://ftp.pantherdb.org/hmm_classifications/current_release/PANTHER14.1_HMM_classifications
         
 csv2es:
-    stepID: panther_csv2es
+    ID: HMM_classification_csv2es
     from:
         fileID: HMM_classifications
         delimiter: \t
@@ -33,7 +33,7 @@ csv2es:
             - Pathway
     to:
         esID: elastic_1
-        index: HMM_classifications_json
+        index: panther_classifications_json
         type: json
         docID: rowNumber
         bulk:
@@ -44,59 +44,128 @@ csv2es:
 
 
 pipeline:
-    name: panther_header
+    ID: Panther_Bio2RDF_header
     processors:
-    - set:
-        field: '@context'
-        value: http://schema.org
-    - set:
-        field: '@namespace'
-        value: panther
-    - set:
-        field: '@id'
-        value: panther:{{_id}}
-    - set:
-        field: '@type'
-        value: panther:gene
+        - set:
+            field: '@context'
+            value: http://schema.org
+        - set:
+            field: '@id'
+            value: panther:{{_id}}
+        - set:
+            field: '@type'
+            value: panther:gene
+        - set:
+            field: '@namespace'
+            value: panther
+        - set:
+            field: '@label'
+            value: {{Gene_Name}} [panther:{{_id}}]
 
-    - split:
-        field: Gene_Identifier
-        separator: "|"
-    - set:
-        field: taxon
-        value: taxonomy:{{Gene_Identifier.0}}
-    - set:
-        field: gene
-        value: '{{Gene_Identifier.1}}'
-    - set:
-        field: uniprot
-        value: '{{Gene_Identifier.2}}'
-    - script:
-        lang: painless
-        source: |
-            "ctx.gene = ctx.gene.replace('HGNC=','hgnc:');
-            ctx.uniprot = ctx.uniprot.replace('UniProtKB=','uniprot:')
-            "
-    - remove:
-        field:
-            - Gene_Identifier
+pipeline:
+    ID: Gene_Identifier
+    processors:
+        - split:
+            field: Gene_Identifier
+            separator: "|"
+        - set:
+            field: taxon
+            value: taxonomy:{{Gene_Identifier.0}}
+        - set:
+            field: gene
+            value: '{{Gene_Identifier.1}}'
+        - set:
+            field: uniprot
+            value: '{{Gene_Identifier.2}}'
+        - script:
+            lang: painless
+            source: |
+                "ctx.gene = ctx.gene.replace('HGNC=','hgnc:');
+                ctx.uniprot = ctx.uniprot.replace('UniProtKB=','uniprot:')
+                "
+        - remove:
+            field:
+                - Gene_Identifier
+macro:
+    ID: macro1
+    parameters:
+        - vars
+    source: |
+ctx.{vars}_labels = new ArrayList();
+for (int i=0; i<ctx.{vars}.length; ++i) {
+    ctx.{vars}_labels.add(ctx.{vars}[i].replace('#GO:',' [go:') + ']') ;
+    }
+
+ctx.{vars}_ids = new ArrayList();
+String s1;
+int pos;
+for (int i=0; i<ctx.{vars}.length; ++i) {
+    s1 = ctx.{vars}[i];
+    pos = s1.indexOf(':');
+    ctx.{vars}_ids.add('go:' + s1.substring(pos+1)) ;
+}
+
+        
+pipeline:
+    ID: GO_list_pipeline
+    processors:
+        - split:
+            field: Biological_process
+            separator: ";"
+        - split:
+            field: Cellular_components
+            separator: ";"
+        - split:
+            field: Molecular_function
+            separator: ";"
+        - script: 
+                source: 
+                    include: 
+                        ID: macro1
+                        parameters: 
+                            - Biological_process
+        - script: 
+                source: 
+                    include: 
+                        ID: macro1
+                        parameters: 
+                            - Cellular_components
+        - script: 
+                source: 
+                    include: 
+                        ID: macro1
+                        parameters: 
+                            - Molecular_function
+        - remove:
+            field: Biological_process
+        - split:
+            field: Cellular_components
+        - split:
+            field: Molecular_function
+            
             
 pipeline:
-    name: createPilelines
-    pipelines:
-        -
-        -
-        -
+    ID: PantherPilelines
+    processors:
+        pipelines:
+            - Panther_Bio2RDF_pipeline
+            - Gene_Identifier_pipeline
+            - GO_list_pipeline
 
 reindex:
-    stepID: 
-
+    ID: reindex_json
+    from: panther_classifications_json
+    to: panther_classifications
+    pipeline: PantherPilelines
+    
 ETL:
     description: Load Panther familly description in ES
     steps:
-        - DownloadClassification
-        - panther_csv2es
-        - createIndex
-        - createPilelines
-        - reindex
-    
+        - Download_HMM_classification
+        - HMM_classification_csv2es
+        - Panther_Bio2RDF_pipeline
+        - Gene_Identifier_pipeline
+        - GO_list_pipeline
+        - Panther_pilelines
+        - Reindex_json2json-ld
+ 
