@@ -1,0 +1,37 @@
+pipeline:
+    name: panther_header
+    processors:
+    - set:
+        field: '@context'
+        value: http://schema.org
+    - set:
+        field: '@namespace'
+        value: panther
+    - set:
+        field: '@id'
+        value: panther:{{_id}}
+    - set:
+        field: '@type'
+        value: panther:gene
+
+    - split:
+        field: Gene_Identifier
+        separator: "|"
+    - set:
+        field: taxon
+        value: taxonomy:{{Gene_Identifier.0}}
+    - set:
+        field: gene
+        value: '{{Gene_Identifier.1}}'
+    - set:
+        field: uniprot
+        value: '{{Gene_Identifier.2}}'
+    - script:
+        lang: painless
+        source: |
+            "ctx.gene = ctx.gene.replace('HGNC=','hgnc:');
+            ctx.uniprot = ctx.uniprot.replace('UniProtKB=','uniprot:')
+            "
+    - remove:
+        field:
+            - Gene_Identifier
