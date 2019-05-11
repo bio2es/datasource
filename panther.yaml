@@ -1,3 +1,48 @@
+# by Francois Belleau
+# https://creativecommons.org/licenses/by/3.0
+# ETL to load Panther familly definition in ES in JSON-LD format
+
+context: 
+    elasticsearch: 
+        esID: elasticServer
+        host: localhost
+        port: 9200
+    workspace:
+        folder: ~/TEMP
+        
+download:
+    stepID: DownloadClassification
+    fileID: HMM_classifications
+    URL: ftp://ftp.pantherdb.org/hmm_classifications/current_release/PANTHER14.1_HMM_classifications
+        
+csv2es:
+    stepID: panther_csv2es
+    from:
+        fileID: HMM_classifications
+        delimiter: \t
+        fieldnames: 
+            - Gene_Identifier
+            - Protein_ID
+            - SF_ID
+            - Family_Name
+            - Subfamily_Name
+            - Molecular_function
+            - Biological_process
+            - Cellular_components
+            - Protein_class
+            - Pathway
+    to:
+        esID: elastic_1
+        index: HMM_classifications_json
+        type: json
+        docID: rowNumber
+        bulk:
+            chunk_size: 250
+            max_retries: 20
+            initial_backoff: 5
+            max_backoff: 5
+
+
 pipeline:
     name: panther_header
     processors:
@@ -35,3 +80,23 @@ pipeline:
     - remove:
         field:
             - Gene_Identifier
+            
+pipeline:
+    name: createPilelines
+    pipelines:
+        -
+        -
+        -
+
+reindex:
+    stepID: 
+
+ETL:
+    description: Load Panther familly description in ES
+    steps:
+        - DownloadClassification
+        - panther_csv2es
+        - createIndex
+        - createPilelines
+        - reindex
+    
